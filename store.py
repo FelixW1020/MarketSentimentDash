@@ -2,7 +2,7 @@ import json
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 DB_PATH = Path(__file__).parent / "dashboard.db"
 
@@ -36,7 +36,7 @@ def init_db() -> None:
         )
 
 
-def cache_get(key: str, ttl: int) -> Any | None:
+def cache_get(key: str, ttl: int) -> Optional[Any]:
     with _conn() as con:
         row = con.execute(
             "SELECT payload, fetched_at FROM cache WHERE key = ?", (key,)
@@ -64,7 +64,7 @@ def append_mention_history(ticker: str, mention_count: int) -> None:
         )
 
 
-def get_mention_history(ticker: str | None = None) -> list[dict]:
+def get_mention_history(ticker: Optional[str] = None) -> list[dict]:
     with _conn() as con:
         if ticker:
             rows = con.execute(

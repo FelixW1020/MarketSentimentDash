@@ -2,7 +2,24 @@
   "permissions": {
     "allow": [
       "Bash(python3 -m venv .venv)",
-      "Bash(.venv/bin/pip install *)"
+      "Bash(.venv/bin/pip install *)",
+      "Skill(run)",
+      "Bash(.venv/bin/python *)",
+      "Bash(curl -s http://127.0.0.1:5000/)",
+      "Bash(pkill -f \"python app.py\")",
+      "Bash(.venv/bin/python app.py)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:5000/)",
+      "Bash(curl -s http://127.0.0.1:5000/api/data)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('ok:', d.get\\('ok'\\)\\); [print\\(t, '- mentions:', v.get\\('mention_count'\\), '| rank:', v.get\\('rank'\\)\\) for t,v in d.get\\('data',{}\\).items\\(\\)]\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('ok:', d.get\\('ok'\\)\\); [print\\(t, '- mentions:', v.get\\('mention_count'\\), '| rank:', v.get\\('rank'\\), '| articles:', len\\(v.get\\('articles',[]\\)\\)\\) for t,v in d.get\\('data',{}\\).items\\(\\)]\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('error'\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('ok:', d.get\\('ok'\\)\\); err=d.get\\('error'\\); err and print\\('error:', err[:120]\\); [print\\(t, '- mentions:', v.get\\('mention_count'\\), '| rank:', v.get\\('rank'\\), '| articles:', len\\(v.get\\('articles',[]\\)\\)\\) for t,v in d.get\\('data',{}\\).items\\(\\)]\")",
+      "Bash(curl -s \"https://api.nytimes.com/svc/search/v2/articlesearch.json?q=GME&api-key=$\\(grep NYT_API_KEY /Users/felixwang1020/MarketSentimentDash/.env)",
+      "Bash(python3 -c ' *)",
+      "Bash(pkill -9 -f \"app.py\")",
+      "Bash(lsof -ti:5000)",
+      "Bash(xargs kill -9)"
     ]
   }
 }

@@ -23,9 +23,14 @@
     .section { margin-bottom: 28px; }
     .cards-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
     .card { background: #1a1d2e; border: 1px solid #2d3148; border-radius: 12px; padding: 20px; }
-    .stat-card { min-width: 160px; flex: 1; }
+    .stat-card { min-width: 150px; flex: 1; }
     .stat-card .label { font-size: 0.75rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
     .stat-card .value { font-size: 2.2rem; font-weight: 700; color: #e2e8f0; }
+    .stat-card .sub { font-size: 0.78rem; color: #6b7280; margin-top: 4px; }
+    .rank-delta { font-size: 0.82rem; margin-left: 6px; }
+    .rank-delta.up   { color: #86efac; }
+    .rank-delta.down { color: #fca5a5; }
+    .rank-delta.same { color: #6b7280; }
     .sentiment-badge { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; margin-left: 8px; }
     .sentiment-badge.Bullish { background: #14532d; color: #86efac; }
     .sentiment-badge.Bearish { background: #450a0a; color: #fca5a5; }
@@ -33,12 +38,6 @@
     .chart-card { width: 100%; padding: 20px; }
     .chart-card h2 { font-size: 0.9rem; color: #9ba3c7; margin-bottom: 16px; }
     #trend-chart { max-height: 240px; }
-    .posts-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    .posts-table th { text-align: left; padding: 8px 10px; color: #6b7280; font-weight: 500; border-bottom: 1px solid #2d3148; }
-    .posts-table td { padding: 8px 10px; border-bottom: 1px solid #1e2235; vertical-align: top; }
-    .posts-table tr:last-child td { border-bottom: none; }
-    .posts-table a { color: #818cf8; text-decoration: none; }
-    .posts-table a:hover { text-decoration: underline; }
     .nyt-panel { display: flex; gap: 16px; flex-wrap: wrap; }
     .nyt-summary-card { flex: 1; min-width: 280px; }
     .nyt-summary-card h2 { font-size: 0.9rem; color: #9ba3c7; margin-bottom: 8px; }
@@ -52,6 +51,7 @@
     .article-item a:hover { text-decoration: underline; }
     .article-item .meta { font-size: 0.75rem; color: #6b7280; margin-top: 3px; }
     .article-item .abstract { font-size: 0.82rem; color: #94a3b8; margin-top: 4px; }
+    .source-tag { font-size: 0.7rem; color: #4b5563; margin-top: 16px; }
     /* EXTENSION POINT: options projections panel goes here */
     footer { background: #1a1d2e; border-top: 1px solid #2d3148; padding: 14px 24px; text-align: center; font-size: 0.78rem; color: #6b7280; }
   </style>
@@ -72,21 +72,25 @@
 </main>
 
 <footer>
-  ⚠️ Informational only. Not financial advice. Data sourced from Reddit r/wallstreetbets and The New York Times.
+  ⚠️ Informational only. Not financial advice. Mention data via ApeWisdom (Reddit aggregation). News via The New York Times.
 </footer>
 
 <script>
-  const TICKERS = {{ tickers | tojson }};
+  let TICKERS = [];
   let allData = {};
   let historyData = [];
-  let activeTicker = TICKERS[0] || '';
+  let activeTicker = '';
   let trendChart = null;
 
-  function fmt(ts) {
-    return ts ? new Date(ts * 1000).toLocaleString() : '';
-  }
-  function fmtDate(s) {
-    return s ? new Date(s).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  function fmt(ts) { return ts ? new Date(ts * 1000).toLocaleString() : ''; }
+  function fmtDate(s) { return s ? new Date(s).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''; }
+
+  function rankDelta(rank, rank24h) {
+    if (!rank || !rank24h) return '';
+    const delta = rank24h - rank;
+    if (delta > 0) return `<span class="rank-delta up">▲ ${delta}</span>`;
+    if (delta < 0) return `<span class="rank-delta down">▼ ${Math.abs(delta)}</span>`;
+    return `<span class="rank-delta same">— same</span>`;
   }
 
   async function fetchData() {
@@ -94,14 +98,14 @@
     document.getElementById('dashboard').style.display = 'none';
     document.getElementById('error-msg').style.display = 'none';
     try {
-      const [dataRes, histRes] = await Promise.all([
-        fetch('/api/data'), fetch('/api/history')
-      ]);
+      const [dataRes, histRes] = await Promise.all([fetch('/api/data'), fetch('/api/history')]);
       const dataJson = await dataRes.json();
       const histJson = await histRes.json();
       if (!dataJson.ok) throw new Error(dataJson.error || 'Unknown error');
       allData = dataJson.data;
+      TICKERS = dataJson.tickers || Object.keys(allData);
       historyData = histJson.ok ? histJson.history : [];
+      if (!activeTicker || !allData[activeTicker]) activeTicker = TICKERS[0] || '';
       document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
       buildTabs();
       renderTicker(activeTicker);
@@ -121,7 +125,8 @@
     TICKERS.forEach(t => {
       const btn = document.createElement('button');
       btn.className = 'tab-btn' + (t === activeTicker ? ' active' : '');
-      btn.textContent = t;
+      const rank = allData[t] && allData[t].rank != null ? ` #${allData[t].rank}` : '';
+      btn.textContent = t + rank;
       btn.onclick = () => { activeTicker = t; buildTabs(); renderTicker(t); };
       container.appendChild(btn);
     });
@@ -139,13 +144,8 @@
       .filter(h => h.ticker === ticker)
       .sort((a, b) => a.ts - b.ts);
 
-    const topPosts = (d.top_posts || []).map(p => `
-      <tr>
-        <td><a href="${escHtml(p.permalink)}" target="_blank" rel="noreferrer">${escHtml(p.title)}</a></td>
-        <td style="text-align:right;color:#86efac">${p.score.toLocaleString()}</td>
-        <td style="text-align:right;color:#93c5fd">${p.num_comments.toLocaleString()}</td>
-        <td style="font-size:0.75rem;color:#6b7280">${fmtDate(p.created_utc)}</td>
-      </tr>`).join('') || '<tr><td colspan="4" style="color:#6b7280;text-align:center">No posts found</td></tr>';
+    const rankStr = d.rank != null ? `#${d.rank}` : '—';
+    const delta = rankDelta(d.rank, d.rank_24h_ago);
 
     const articles = (d.articles || []).map(a => `
       <div class="article-item">
@@ -157,16 +157,22 @@
     document.getElementById('dashboard').innerHTML = `
       <div class="cards-row">
         <div class="card stat-card">
-          <div class="label">WSB Mentions</div>
+          <div class="label">24h Mentions</div>
           <div class="value">${(d.mention_count || 0).toLocaleString()}</div>
+          <div class="sub">${(d.mentions_24h_ago || 0).toLocaleString()} mentions yesterday</div>
         </div>
         <div class="card stat-card">
-          <div class="label">Posts Containing ${escHtml(ticker)}</div>
-          <div class="value">${(d.post_count || 0).toLocaleString()}</div>
+          <div class="label">Upvotes</div>
+          <div class="value">${(d.upvotes || 0).toLocaleString()}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="label">Rank ${delta}</div>
+          <div class="value">${escHtml(rankStr)}</div>
+          <div class="sub">${d.rank_24h_ago != null ? `was #${d.rank_24h_ago} yesterday` : ''}</div>
         </div>
         <div class="card stat-card">
           <div class="label">NYT Sentiment</div>
-          <div class="value" style="font-size:1.4rem;margin-top:4px">
+          <div class="value" style="font-size:1.3rem;margin-top:6px">
             <span class="sentiment-badge ${badgeClass}">${escHtml(sentiment)}</span>
           </div>
         </div>
@@ -175,14 +181,6 @@
       <div class="card chart-card section">
         <h2>Mention Trend — ${escHtml(ticker)}</h2>
         <canvas id="trend-chart"></canvas>
-      </div>
-
-      <div class="card section">
-        <h2 style="font-size:0.9rem;color:#9ba3c7;margin-bottom:14px">Top WSB Posts</h2>
-        <table class="posts-table">
-          <thead><tr><th>Title</th><th>Score</th><th>Comments</th><th>Date</th></tr></thead>
-          <tbody>${topPosts}</tbody>
-        </table>
       </div>
 
       <div class="nyt-panel section">
@@ -198,6 +196,8 @@
       </div>
 
       <!-- EXTENSION POINT: options projections panel goes here -->
+
+      <p class="source-tag">Mention data sourced from <a href="https://apewisdom.io" target="_blank" style="color:#4b5563">ApeWisdom</a> (Reddit aggregation across r/wallstreetbets and related subreddits).</p>
     `;
 
     buildTrendChart(tickerHistory);
@@ -208,7 +208,7 @@
     if (!ctx) return;
     if (trendChart) { trendChart.destroy(); trendChart = null; }
     if (!history.length) {
-      ctx.parentElement.insertAdjacentHTML('beforeend', '<p style="color:#6b7280;font-size:0.82rem">Not enough history yet — data accumulates across refreshes.</p>');
+      ctx.parentElement.insertAdjacentHTML('beforeend', '<p style="color:#6b7280;font-size:0.82rem;margin-top:8px">Not enough history yet — data accumulates across refreshes.</p>');
       return;
     }
     trendChart = new Chart(ctx, {

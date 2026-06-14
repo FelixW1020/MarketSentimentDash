@@ -9,14 +9,17 @@ app = Flask(__name__)
 
 @app.route("/")
 def index():
-    return render_template("index.html", tickers=config.TICKERS)
+    return render_template("index.html")
 
 
 @app.route("/api/data")
 def api_data():
     try:
-        data = pipeline.run()
-        return jsonify({"ok": True, "data": data})
+        tickers = config.TICKERS if config.TICKERS else None
+        data = pipeline.run(tickers)
+        # Return tickers in rank order
+        ordered = sorted(data.values(), key=lambda v: v.get("rank") or 9999)
+        return jsonify({"ok": True, "data": data, "tickers": [v["ticker"] for v in ordered]})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 

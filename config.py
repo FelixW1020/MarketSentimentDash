@@ -12,15 +12,20 @@ def _require(key: str) -> str:
         )
     return val
 
-REDDIT_CLIENT_ID = _require("REDDIT_CLIENT_ID")
-REDDIT_CLIENT_SECRET = _require("REDDIT_CLIENT_SECRET")
+# Reddit keys are optional — only needed if switching back from ApeWisdom
+REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID", "")
+REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET", "")
 REDDIT_USER_AGENT = os.getenv("REDDIT_USER_AGENT", "wsb-dashboard/0.1")
 
 NYT_API_KEY = _require("NYT_API_KEY")
 
 ANTHROPIC_API_KEY = _require("ANTHROPIC_API_KEY")
 
-TICKERS = [t.strip().upper() for t in os.getenv("TICKERS", "GME,TSLA,NVDA").split(",") if t.strip()]
+# If TICKERS is set, use that fixed list. Otherwise the pipeline pulls top N from ApeWisdom live.
+_tickers_env = os.getenv("TICKERS", "")
+TICKERS = [t.strip().upper() for t in _tickers_env.split(",") if t.strip()] if _tickers_env else []
+TOP_N = int(os.getenv("TOP_N", "10"))
+APE_FILTER = os.getenv("APE_FILTER", "all-stocks")
 LOOKBACK_HOURS = int(os.getenv("LOOKBACK_HOURS", "24"))
 WSB_POST_LIMIT = int(os.getenv("WSB_POST_LIMIT", "400"))
 

@@ -1,11 +1,11 @@
 import json
-from typing import Any
+from typing import Any, Optional
 
 import anthropic
 
 import config
 
-_client: anthropic.Anthropic | None = None
+_client: Optional[anthropic.Anthropic] = None
 
 
 def _get_client() -> anthropic.Anthropic:
@@ -68,5 +68,9 @@ Do not include any text outside the JSON object."""
                 "sentiment": "Neutral",
                 "rationale": "Could not parse structured response.",
             }
-    except anthropic.APIError as exc:
-        raise RuntimeError(f"Anthropic API error for {ticker}: {exc}") from exc
+    except anthropic.APIError:
+        return {
+            "summary": "AI summary unavailable — Anthropic API could not be reached (check billing or key).",
+            "sentiment": "Neutral",
+            "rationale": "Summary skipped due to API error.",
+        }

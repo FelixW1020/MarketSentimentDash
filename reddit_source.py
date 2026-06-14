@@ -1,7 +1,7 @@
 import re
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 import praw
 
@@ -10,7 +10,7 @@ import config
 # Tickers that are common English words — skip standalone match to avoid noise
 STOP_TICKERS = {"A", "AN", "BE", "FOR", "GO", "IT", "ME", "ON", "OR", "SO", "TO", "UP"}
 
-_reddit: praw.Reddit | None = None
+_reddit: Optional[praw.Reddit] = None
 
 
 def _get_reddit() -> praw.Reddit:
