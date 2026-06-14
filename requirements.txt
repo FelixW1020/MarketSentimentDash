@@ -1,0 +1,5 @@
+praw
+requests
+anthropic
+flask
+python-dotenv

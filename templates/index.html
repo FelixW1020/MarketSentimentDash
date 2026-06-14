@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WSB × NYT Market Sentiment Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; display: flex; flex-direction: column; }
+    header { background: #1a1d2e; border-bottom: 1px solid #2d3148; padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    header h1 { font-size: 1.1rem; font-weight: 700; color: #7c83e0; white-space: nowrap; }
+    #ticker-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tab-btn { padding: 5px 14px; border-radius: 20px; border: 1px solid #3d4166; background: transparent; color: #9ba3c7; cursor: pointer; font-size: 0.85rem; transition: all 0.15s; }
+    .tab-btn.active { background: #7c83e0; border-color: #7c83e0; color: #fff; font-weight: 600; }
+    .tab-btn:hover:not(.active) { border-color: #7c83e0; color: #c0c5f0; }
+    #refresh-btn { margin-left: auto; padding: 6px 16px; border-radius: 6px; border: none; background: #4f54b0; color: #fff; cursor: pointer; font-size: 0.85rem; }
+    #refresh-btn:hover { background: #6067cc; }
+    #last-updated { font-size: 0.75rem; color: #6b7280; white-space: nowrap; }
+    main { flex: 1; padding: 24px; max-width: 1200px; width: 100%; margin: 0 auto; }
+    #loading { text-align: center; padding: 60px; color: #6b7280; font-size: 1.1rem; }
+    #error-msg { background: #3b1111; border: 1px solid #7f1d1d; border-radius: 8px; padding: 16px; color: #fca5a5; margin-bottom: 20px; display: none; }
+    .section { margin-bottom: 28px; }
+    .cards-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+    .card { background: #1a1d2e; border: 1px solid #2d3148; border-radius: 12px; padding: 20px; }
+    .stat-card { min-width: 160px; flex: 1; }
+    .stat-card .label { font-size: 0.75rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .stat-card .value { font-size: 2.2rem; font-weight: 700; color: #e2e8f0; }
+    .sentiment-badge { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; margin-left: 8px; }
+    .sentiment-badge.Bullish { background: #14532d; color: #86efac; }
+    .sentiment-badge.Bearish { background: #450a0a; color: #fca5a5; }
+    .sentiment-badge.Neutral  { background: #1e3a5f; color: #93c5fd; }
+    .chart-card { width: 100%; padding: 20px; }
+    .chart-card h2 { font-size: 0.9rem; color: #9ba3c7; margin-bottom: 16px; }
+    #trend-chart { max-height: 240px; }
+    .posts-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .posts-table th { text-align: left; padding: 8px 10px; color: #6b7280; font-weight: 500; border-bottom: 1px solid #2d3148; }
+    .posts-table td { padding: 8px 10px; border-bottom: 1px solid #1e2235; vertical-align: top; }
+    .posts-table tr:last-child td { border-bottom: none; }
+    .posts-table a { color: #818cf8; text-decoration: none; }
+    .posts-table a:hover { text-decoration: underline; }
+    .nyt-panel { display: flex; gap: 16px; flex-wrap: wrap; }
+    .nyt-summary-card { flex: 1; min-width: 280px; }
+    .nyt-summary-card h2 { font-size: 0.9rem; color: #9ba3c7; margin-bottom: 8px; }
+    .nyt-summary-card p { font-size: 0.9rem; line-height: 1.6; color: #cbd5e1; }
+    .nyt-summary-card .rationale { margin-top: 10px; font-size: 0.8rem; color: #6b7280; font-style: italic; }
+    .articles-list { flex: 1; min-width: 280px; }
+    .articles-list h2 { font-size: 0.9rem; color: #9ba3c7; margin-bottom: 10px; }
+    .article-item { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid #2d3148; }
+    .article-item:last-child { border-bottom: none; }
+    .article-item a { color: #818cf8; font-size: 0.9rem; font-weight: 500; text-decoration: none; }
+    .article-item a:hover { text-decoration: underline; }
+    .article-item .meta { font-size: 0.75rem; color: #6b7280; margin-top: 3px; }
+    .article-item .abstract { font-size: 0.82rem; color: #94a3b8; margin-top: 4px; }
+    /* EXTENSION POINT: options projections panel goes here */
+    footer { background: #1a1d2e; border-top: 1px solid #2d3148; padding: 14px 24px; text-align: center; font-size: 0.78rem; color: #6b7280; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>WSB × NYT Sentiment</h1>
+  <div id="ticker-tabs"></div>
+  <button id="refresh-btn">↻ Refresh</button>
+  <span id="last-updated"></span>
+</header>
+
+<main>
+  <div id="loading">Loading data — this may take a moment on first run…</div>
+  <div id="error-msg"></div>
+  <div id="dashboard" style="display:none"></div>
+</main>
+
+<footer>
+  ⚠️ Informational only. Not financial advice. Data sourced from Reddit r/wallstreetbets and The New York Times.
+</footer>
+
+<script>
+  const TICKERS = {{ tickers | tojson }};
+  let allData = {};
+  let historyData = [];
+  let activeTicker = TICKERS[0] || '';
+  let trendChart = null;
+
+  function fmt(ts) {
+    return ts ? new Date(ts * 1000).toLocaleString() : '';
+  }
+  function fmtDate(s) {
+    return s ? new Date(s).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  }
+
+  async function fetchData() {
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('error-msg').style.display = 'none';
+    try {
+      const [dataRes, histRes] = await Promise.all([
+        fetch('/api/data'), fetch('/api/history')
+      ]);
+      const dataJson = await dataRes.json();
+      const histJson = await histRes.json();
+      if (!dataJson.ok) throw new Error(dataJson.error || 'Unknown error');
+      allData = dataJson.data;
+      historyData = histJson.ok ? histJson.history : [];
+      document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+      buildTabs();
+      renderTicker(activeTicker);
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+    } catch (e) {
+      document.getElementById('loading').style.display = 'none';
+      const el = document.getElementById('error-msg');
+      el.textContent = 'Error: ' + e.message;
+      el.style.display = 'block';
+    }
+  }
+
+  function buildTabs() {
+    const container = document.getElementById('ticker-tabs');
+    container.innerHTML = '';
+    TICKERS.forEach(t => {
+      const btn = document.createElement('button');
+      btn.className = 'tab-btn' + (t === activeTicker ? ' active' : '');
+      btn.textContent = t;
+      btn.onclick = () => { activeTicker = t; buildTabs(); renderTicker(t); };
+      container.appendChild(btn);
+    });
+  }
+
+  function renderTicker(ticker) {
+    const d = allData[ticker];
+    if (!d) return;
+
+    const ai = d.ai || {};
+    const sentiment = ai.sentiment || 'Neutral';
+    const badgeClass = ['Bullish','Bearish'].includes(sentiment) ? sentiment : 'Neutral';
+
+    const tickerHistory = historyData
+      .filter(h => h.ticker === ticker)
+      .sort((a, b) => a.ts - b.ts);
+
+    const topPosts = (d.top_posts || []).map(p => `
+      <tr>
+        <td><a href="${escHtml(p.permalink)}" target="_blank" rel="noreferrer">${escHtml(p.title)}</a></td>
+        <td style="text-align:right;color:#86efac">${p.score.toLocaleString()}</td>
+        <td style="text-align:right;color:#93c5fd">${p.num_comments.toLocaleString()}</td>
+        <td style="font-size:0.75rem;color:#6b7280">${fmtDate(p.created_utc)}</td>
+      </tr>`).join('') || '<tr><td colspan="4" style="color:#6b7280;text-align:center">No posts found</td></tr>';
+
+    const articles = (d.articles || []).map(a => `
+      <div class="article-item">
+        <a href="${escHtml(a.url)}" target="_blank" rel="noreferrer">${escHtml(a.headline || 'Untitled')}</a>
+        <div class="meta">${escHtml(fmtDate(a.pub_date))}${a.byline ? ' · ' + escHtml(a.byline) : ''}</div>
+        ${a.abstract ? `<div class="abstract">${escHtml(a.abstract)}</div>` : ''}
+      </div>`).join('') || '<p style="color:#6b7280;font-size:0.85rem">No recent NYT articles found.</p>';
+
+    document.getElementById('dashboard').innerHTML = `
+      <div class="cards-row">
+        <div class="card stat-card">
+          <div class="label">WSB Mentions</div>
+          <div class="value">${(d.mention_count || 0).toLocaleString()}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="label">Posts Containing ${escHtml(ticker)}</div>
+          <div class="value">${(d.post_count || 0).toLocaleString()}</div>
+        </div>
+        <div class="card stat-card">
+          <div class="label">NYT Sentiment</div>
+          <div class="value" style="font-size:1.4rem;margin-top:4px">
+            <span class="sentiment-badge ${badgeClass}">${escHtml(sentiment)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card chart-card section">
+        <h2>Mention Trend — ${escHtml(ticker)}</h2>
+        <canvas id="trend-chart"></canvas>
+      </div>
+
+      <div class="card section">
+        <h2 style="font-size:0.9rem;color:#9ba3c7;margin-bottom:14px">Top WSB Posts</h2>
+        <table class="posts-table">
+          <thead><tr><th>Title</th><th>Score</th><th>Comments</th><th>Date</th></tr></thead>
+          <tbody>${topPosts}</tbody>
+        </table>
+      </div>
+
+      <div class="nyt-panel section">
+        <div class="card nyt-summary-card">
+          <h2>NYT AI Summary <span class="sentiment-badge ${badgeClass}">${escHtml(sentiment)}</span></h2>
+          <p>${escHtml(ai.summary || 'No summary available.')}</p>
+          ${ai.rationale ? `<p class="rationale">${escHtml(ai.rationale)}</p>` : ''}
+        </div>
+        <div class="card articles-list">
+          <h2>Recent NYT Articles</h2>
+          ${articles}
+        </div>
+      </div>
+
+      <!-- EXTENSION POINT: options projections panel goes here -->
+    `;
+
+    buildTrendChart(tickerHistory);
+  }
+
+  function buildTrendChart(history) {
+    const ctx = document.getElementById('trend-chart');
+    if (!ctx) return;
+    if (trendChart) { trendChart.destroy(); trendChart = null; }
+    if (!history.length) {
+      ctx.parentElement.insertAdjacentHTML('beforeend', '<p style="color:#6b7280;font-size:0.82rem">Not enough history yet — data accumulates across refreshes.</p>');
+      return;
+    }
+    trendChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: history.map(h => fmt(h.ts)),
+        datasets: [{
+          label: 'Mentions',
+          data: history.map(h => h.mention_count),
+          borderColor: '#7c83e0',
+          backgroundColor: 'rgba(124,131,224,0.15)',
+          tension: 0.3,
+          fill: true,
+          pointRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#6b7280', maxTicksLimit: 8 }, grid: { color: '#1e2235' } },
+          y: { ticks: { color: '#6b7280' }, grid: { color: '#1e2235' }, beginAtZero: true }
+        }
+      }
+    });
+  }
+
+  function escHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  document.getElementById('refresh-btn').addEventListener('click', fetchData);
+  fetchData();
+</script>
+</body>
+</html>
